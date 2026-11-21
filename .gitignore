@@ -7,3 +7,4 @@ stl/
 *.stl
 *.step
 *.stp
+node_modules/

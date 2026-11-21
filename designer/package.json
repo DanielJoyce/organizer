@@ -1,0 +1,21 @@
+{
+  "name": "organizer-designer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "tsx src/check.ts",
+    "build": "tsx src/build.ts ../stl/proto",
+    "check": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^26.6.6",
+    "manifold-3d": "^3.5.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "type": "module"
+}
