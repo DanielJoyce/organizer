@@ -17,6 +17,8 @@ export interface System {
   bodyGap: number; // gap between neighbouring module bodies
   seamRelief: number; // relief under perimeter walls for the seam joiner
   floorT: number; // module floor
+  keyHead: number; // twist key head, square side
+  keyCapR: number; // twist key cap radius
   binWall: number;
 }
 
@@ -41,6 +43,9 @@ export function makeSystem(u: number, over: Partial<System> = {}): System {
     seamRelief: 0.8,
     floorT: 2,
     binWall: 1.2,
+    // On coarse pitches the key is smaller than the cell so its cap stays inside one cell.
+    keyHead: u >= 12 ? bossW - 1.6 : bossW,
+    keyCapR: u >= 12 ? u / 2 : bossW / 2 + 2.8,
     ...over,
   };
 }
@@ -59,6 +64,25 @@ export interface PlateOpts {
   screws?: [number, number][];
   screwD?: number;
 }
+
+/**
+ * Evenly spread screw cells: nx columns by ny rows of screws, kept `inset` cells in from the
+ * edge. Use the result as PlateOpts.screws. One screw per axis lands on the centre cell.
+ */
+export function screwGrid(cols: number, rows: number, nx: number, ny: number, inset = 1): [number, number][] {
+  const line = (cells: number, count: number) => {
+    const lo = Math.min(inset, Math.floor((cells - 1) / 2));
+    const hi = cells - 1 - lo;
+    if (count <= 1) return [Math.floor((cells - 1) / 2)];
+    return [...new Set(Array.from({ length: count }, (_, k) => Math.round(lo + (k * (hi - lo)) / (count - 1))))];
+  };
+  const out: [number, number][] = [];
+  for (const i of line(cols, nx)) for (const j of line(rows, ny)) out.push([i, j]);
+  return out;
+}
+
+/** Largest square plate, in cells, that fits a bed with a margin all round. */
+export const maxCells = (s: System, bedMm: number, marginMm = 5) => Math.floor((bedMm - 2 * marginMm) / s.u);
 
 /** Open lattice. Top face at z = 0. Print top face down. */
 export function plate(s: System, o: PlateOpts): Solid {
@@ -166,7 +190,7 @@ export function foot(s: System, o: FootOpts): Solid {
 
 /** Through holes in a module floor that line up with plate cells and accept a twist key. */
 export function lockHoles(s: System, cells: [number, number][], depth: number): Solid {
-  const h = cellHole(s);
+  const h = s.keyHead + 0.4;
   return union(cells.map(([i, j]) => box(cx(s, i) - h / 2, cx(s, j) - h / 2, -1, h, h, depth + 2)));
 }
 
@@ -175,9 +199,9 @@ export function lockHoles(s: System, cells: [number, number][], depth: number): 
 /** Twist key. Square head passes a cell, a 45 degree turn puts its corners under the walls. */
 export function twistKey(s: System, stack: number): Solid {
   const head = 1.6;
-  const r = s.bossW / 2;
+  const r = s.keyHead / 2;
   const neck = stack + 0.1;
-  const capR = r + 2.8;
+  const capR = s.keyCapR;
   const parts = [
     box(-r, -r, 0, 2 * r, 2 * r, head),
     cyl(neck, r).translate([0, 0, head]),
@@ -227,6 +251,11 @@ export function bin(s: System, o: BinOpts): Solid {
   const D = o.ny * s.u - 2 * g;
   const H = o.nz * s.u;
   const w = s.binWall;
+  // A key cap needs clear floor all round, so key cells cannot sit against a bin wall.
+  for (const [i, j] of o.lock ?? []) {
+    const room = Math.min(cx(s, i), o.nx * s.u - cx(s, i), cx(s, j), o.ny * s.u - cx(s, j)) - g - w;
+    if (room < s.keyCapR + 0.2) throw new Error(`key cell ${i},${j} is too close to the bin wall for a ${2 * s.keyCapR} mm cap`);
+  }
   let body = box(g, g, 0, W, D, H).subtract(box(g + w, g + w, s.floorT, W - 2 * w, D - 2 * w, H));
   body = union([body, foot(s, o)]);
   if (o.lock?.length) body = body.subtract(lockHoles(s, o.lock, s.floorT));

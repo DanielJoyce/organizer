@@ -31,7 +31,7 @@ p.screenshot(f"{dst}/assembly.png")
 
 # 2. underside of the interface: bin foot, plate, key
 p = plotter((1600, 1000))
-b = mesh(f"{src}/bin_32x32x16_lock.stl").rotate_x(180).translate((0, 32, 20))
+b = mesh(f"{src}/bin_48x48x16_lock.stl").rotate_x(180).translate((0, 32, 20))
 add(p, b, COL["bin"])
 pl = mesh(f"{src}/fit_test_plate_48.stl").translate((40, -8, 0)); add(p, pl, COL["plate"])
 k = mesh(f"{src}/twist_key_short.stl").translate((100, 4, 0)); add(p, k, COL["key"])
