@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "tsx src/check.ts",
-    "build": "tsx src/build.ts ../stl/proto",
+    "build": "tsx src/build.ts",
     "check": "tsc"
   },
   "keywords": [],

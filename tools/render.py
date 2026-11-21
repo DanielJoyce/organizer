@@ -31,19 +31,19 @@ p.screenshot(f"{dst}/assembly.png")
 
 # 2. underside of the interface: bin foot, plate, key
 p = plotter((1600, 1000))
-b = mesh(f"{src}/bin_4x4x2_lock.stl").rotate_x(180).translate((0, 32, 20))
+b = mesh(f"{src}/bin_32x32x16_lock.stl").rotate_x(180).translate((0, 32, 20))
 add(p, b, COL["bin"])
-pl = mesh(f"{src}/fit_test_plate_4x4.stl").translate((44, 0, 0)); add(p, pl, COL["plate"])
-k = mesh(f"{src}/twist_key_short.stl").translate((92, 12, 0)); add(p, k, COL["key"])
-d = mesh(f"{src}/dowel.stl").translate((112, 8, 0)); add(p, d, COL["key"])
-j = mesh(f"{src}/seam_joiner.stl").translate((108, 26, 0)); add(p, j, COL["key"])
-p.camera_position = [(170, -150, 130), (62, 16, 6), (0, 0, 1)]
+pl = mesh(f"{src}/fit_test_plate_48.stl").translate((40, -8, 0)); add(p, pl, COL["plate"])
+k = mesh(f"{src}/twist_key_short.stl").translate((100, 4, 0)); add(p, k, COL["key"])
+d = mesh(f"{src}/dowel.stl").translate((128, 0, 0)); add(p, d, COL["key"])
+j = mesh(f"{src}/seam_joiner.stl").translate((122, 26, 0)); add(p, j, COL["key"])
+p.camera_position = [(190, -170, 150), (70, 14, 6), (0, 0, 1)]
 p.camera.zoom(1.25)
 p.screenshot(f"{dst}/interface.png")
 
 # 3. contact sheet, parts in print orientation
-names = ["plate_wall_12x12", "paint_rack_3x2_lock", "paint_cell_hex6", "paint_cell_lame4", "bin_4x6x4",
-         "drawer_shell_12x6x15", "drawer_12x6x15", "sprue_rack_12x10", "wall_shelf_12x8x6"]
+names = ["plate_wall_96", "paint_rack_3x2_lock", "paint_cell_hex6", "paint_cell_lame4", "bin_32x48x32",
+         "drawer_shell_96x48x128", "drawer_96x48x128", "sprue_rack_96x80", "wall_shelf_96x64x48"]
 p = pv.Plotter(off_screen=True, window_size=(1800, 1800), shape=(3, 3)); p.set_background("white")
 for i, n in enumerate(names):
     p.subplot(i // 3, i % 3)

@@ -103,3 +103,23 @@ STL and STEP files are not checked in. The scripts write these to `stl/`:
 | `grid_baseplate_26x26.stl` | 208 x 208 mm baseplate |
 | `fit_test_tab_2x2.stl` | Two-peg tab for fit testing |
 | `fit_test_baseplate_4x4.stl` | Small baseplate for fit testing |
+
+## System prototype (designer/)
+
+`designer/` is a TypeScript package that generates a wider organizer system on one lattice:
+plates, a module foot with bosses and grip pegs, a twist key, bins, paint racks, a drawer unit,
+a sprue rack and a wall shelf. Geometry runs on manifold-3d. Nothing here has been print tested.
+
+```
+cd designer
+npm install
+npm run build          # 16 mm pitch, writes ../stl/proto-u16
+npm run build -- 8     # 8 mm pitch, writes ../stl/proto-u8
+npm test               # fit checks, optional pitch argument
+python ../tools/render.py ../stl/proto-u16 ../docs/img/u16   # needs pyvista
+```
+
+The pitch is one argument to `makeSystem` in `src/parts.ts`. Part sizes in `src/build.ts` are
+given in millimetres and must be whole multiples of the pitch.
+
+![16 mm assembly](docs/img/u16/assembly.png)

@@ -20,21 +20,32 @@ export interface System {
   binWall: number;
 }
 
-export const SYS: System = {
-  u: 8,
-  wall: 1.2,
-  plateT: 4.8,
-  standoff: 3.2,
-  bossW: 6.4,
-  bossL: 3.2,
-  bossBore: 4.8,
-  gripRoot: 6.6,
-  gripBulge: 7.1,
-  bodyGap: 0.4,
-  seamRelief: 0.8,
-  floorT: 2,
-  binWall: 1.2,
-};
+/** System constants for a given lattice pitch. Fits are the same at every pitch. */
+export function makeSystem(u: number, over: Partial<System> = {}): System {
+  const wall = 1.2;
+  const cell = u - wall;
+  const bossW = cell - 0.4;
+  return {
+    u,
+    wall,
+    plateT: 4.8,
+    standoff: 3.2,
+    bossW,
+    bossL: 3.2,
+    // Ring wall is 0.8 mm on small bosses. On large ones the bore is capped so the floor
+    // above it never bridges more than 9.6 mm.
+    bossBore: Math.min(bossW - 1.6, 9.6),
+    gripRoot: cell - 0.2,
+    gripBulge: cell + 0.3,
+    bodyGap: 0.4,
+    seamRelief: 0.8,
+    floorT: 2,
+    binWall: 1.2,
+    ...over,
+  };
+}
+
+export const SYS: System = makeSystem(16);
 
 const cellHole = (s: System) => s.u - s.wall;
 const cx = (s: System, i: number) => (i + 0.5) * s.u;
@@ -166,7 +177,7 @@ export function twistKey(s: System, stack: number): Solid {
   const head = 1.6;
   const r = s.bossW / 2;
   const neck = stack + 0.1;
-  const capR = 6;
+  const capR = r + 2.8;
   const parts = [
     box(-r, -r, 0, 2 * r, 2 * r, head),
     cyl(neck, r).translate([0, 0, head]),
@@ -187,13 +198,14 @@ export function dowel(s: System): Solid {
 export function seamJoiner(s: System): Solid {
   const t = s.seamRelief;
   const pegH = s.plateT - s.bossL - 0.1;
+  const c = s.u - s.wall;
   const peg = sqStack([
-    [0, 6.6],
-    [pegH * 0.5, 7.0],
-    [pegH, 6.2],
+    [0, c - 0.2],
+    [pegH * 0.5, c + 0.2],
+    [pegH, c - 0.6],
   ]);
   return union([
-    box(-s.u + 0.3, -3.2, -t, 2 * s.u - 0.6, 6.4, t),
+    box(-s.u + 0.3, -s.bossW / 2, -t, 2 * s.u - 0.6, s.bossW, t),
     peg.translate([-s.u / 2, 0, 0]),
     peg.translate([s.u / 2, 0, 0]),
   ]);
@@ -225,10 +237,10 @@ export function bin(s: System, o: BinOpts): Solid {
 
 export interface PaintOpts {
   bottleD: number;
-  cellU: number; // cell pitch in lattice units
+  cellMm: number; // cell pitch in mm, a whole number of lattice units
   cols: number;
   rows: number;
-  heightU: number;
+  heightMm: number;
   lobes: 4 | 6;
   boreClearance: number;
   tubeWall: number;
@@ -243,10 +255,10 @@ export interface PaintOpts {
 
 export const DROPPER: PaintOpts = {
   bottleD: 26,
-  cellU: 4,
+  cellMm: 32,
   cols: 1,
   rows: 1,
-  heightU: 3,
+  heightMm: 24,
   lobes: 6,
   boreClearance: 1.5,
   tubeWall: 1.2,
@@ -302,7 +314,7 @@ const smooth = (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.ma
 
 /** One squeeze tube: circle at the base, lobed in the grip band, circle again at the top. */
 function squeezeTube(s: System, o: PaintOpts): { outer: Solid; bore: Solid } {
-  const H = o.heightU * s.u;
+  const H = o.heightMm;
   const rBore = (o.bottleD + o.boreClearance) / 2;
   const rFlat = o.bottleD / 2 - o.interference;
   const z0 = s.floorT;
@@ -330,14 +342,16 @@ function squeezeTube(s: System, o: PaintOpts): { outer: Solid; bore: Solid } {
 
 /** Paint rack: cols x rows squeeze tubes on one floor, with an optional lock strip at the back. */
 export function paintRack(s: System, o: PaintOpts): Solid {
-  const pitch = o.cellU * s.u;
+  const pitch = o.cellMm;
+  const cellU = Math.round(pitch / s.u);
+  if (Math.abs(cellU * s.u - pitch) > 1e-9) throw new Error(`cell pitch ${pitch} is not a multiple of ${s.u}`);
   const g = s.bodyGap / 2;
-  const nx = o.cols * o.cellU;
-  const ny = o.rows * o.cellU + (o.lockStrip ? 1 : 0);
+  const nx = o.cols * cellU;
+  const ny = o.rows * cellU + (o.lockStrip ? 1 : 0);
   const lock: [number, number][] = o.lockStrip
     ? [
-        [1, ny - 1],
-        [nx - 2, ny - 1],
+        [nx > 2 ? 1 : 0, ny - 1],
+        [nx > 2 ? nx - 2 : nx - 1, ny - 1],
       ]
     : [];
   const { outer, bore } = squeezeTube(s, o);
