@@ -68,6 +68,8 @@ for (const [name, solid] of Object.entries(parts)) {
   writeStl(`${out}/${name}.stl`, onBed);
 }
 console.table(rows);
+const split = Object.entries(rows).filter(([, r]) => (r as { bodies: number }).bodies !== 1).map(([k]) => k);
+if (split.length) throw new Error(`parts that are not one body: ${split.join(", ")}`);
 
 // Desk assembly used for the preview render: parts in their installed positions (mm).
 const at = (p: Solid, x: number, y: number, z = 0) => p.translate([n(x) * U, n(y) * U, z]);
@@ -104,6 +106,10 @@ const demo: Record<string, Solid> = {
   key_locked: key.translate([off + kc(lockCells[1][0]), off + kc(lockCells[1][1]), keyZ]),
 };
 for (const [name, solid] of Object.entries(demo)) writeStl(`${out}/key_demo/${name}.stl`, solid);
+
+// Snap demo: a 2 x 2 tab with corner grip pegs seated on a small plate.
+writeStl(`${out}/snap_demo/plate.stl`, P.plate(s, { cols: n(48), rows: n(48) }));
+writeStl(`${out}/snap_demo/tab.stl`, P.bin(s, { nx: n(32), ny: n(32), nz: 8 / U, grip: "corners" }));
 
 // Seam demo: two plates edge to edge with joiners under the seam.
 const sj = P.seamJoiner(s).translate([0, 0, -s.plateT]);

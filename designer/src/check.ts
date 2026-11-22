@@ -16,7 +16,9 @@ const snug = P.bin(s, { nx: 32 / U, ny: 48 / U, nz: 1, grip: "corners" }).transl
 const vLoose = plate.intersect(loose).volume();
 const vSnug = plate.intersect(snug).volume();
 ok("boss clearance", vLoose < 1e-6, `overlap ${vLoose.toFixed(4)} mm3`);
-ok("grip interference", vSnug > 0.5 && vSnug < 40, `overlap ${vSnug.toFixed(2)} mm3 over 4 pegs`);
+ok("grip peg seats free", vSnug < 1e-6, `overlap ${vSnug.toFixed(4)} mm3 when seated`);
+const vLift = plate.intersect(snug.translate([0, 0, 0.6])).volume();
+ok("grip peg held by lip", vLift > 0.2, `lifting 0.6 mm gives ${vLift.toFixed(2)} mm3 of overlap with the lip over 4 pegs`);
 
 // Twist key: passes a cell when square to it, does not touch the plate when turned 45 degrees,
 // and its head corners sit under the walls after the turn.
@@ -64,6 +66,6 @@ ok("round above grip", Math.abs(tMin - 13.75) < 0.05 && Math.abs(tMax - 13.75) <
 const shell = P.drawerShell(s, { nx: 96 / U, nz: 48 / U, ny: 128 / U, wall: 1.6, slide: 0.4 });
 const dowel = P.dowel(s).rotate([-90, 0, 0]);
 const dv = dowel.translate([U / 2, U / 2, 0]);
-ok("dowel in shell pocket", shell.intersect(dv).volume() < 12 * (U / 8), `overlap ${shell.intersect(dv).volume().toFixed(2)} mm3 (bulge only)`);
+ok("dowel in shell pocket", shell.intersect(dv).volume() < 1e-6, `overlap ${shell.intersect(dv).volume().toFixed(2)} mm3 when seated`);
 ok("all solids valid", [plate, loose, snug, key, cellSolid, shell].every((m) => m.status() === "NoError" && m.volume() > 0), "status NoError");
 process.exit(fail ? 1 : 0);

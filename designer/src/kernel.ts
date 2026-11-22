@@ -16,22 +16,22 @@ export const union = (parts: Solid[]): Solid =>
 export const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number): Solid =>
   Manifold.cube([sx, sy, sz]).translate([x, y, z]);
 
-/** Square frustum centred on the Z axis, width w0 at z0 and w1 at z1. */
-export function sqFrustum(w0: number, w1: number, z0: number, z1: number): Solid {
-  const s = w1 / w0;
-  return CrossSection.square([w0, w0], true).extrude(z1 - z0, 0, 0, [s, s]).translate([0, 0, z0]);
+/**
+ * Stack of rectangular sections from [z, widthX, widthY] stations, centred on the Z axis.
+ * Built as one lofted mesh, so there are no coincident internal faces between segments.
+ */
+export function rectStack(stations: [number, number, number][]): Solid {
+  const rings = stations.map(([, x, y]) => [
+    [-x / 2, -y / 2],
+    [x / 2, -y / 2],
+    [x / 2, y / 2],
+    [-x / 2, y / 2],
+  ] as [number, number][]);
+  return loft(rings, stations.map(([z]) => z));
 }
 
-/** Stack of square frustums from a list of [z, width] stations. */
-export function sqStack(stations: [number, number][]): Solid {
-  const parts: Solid[] = [];
-  for (let i = 0; i + 1 < stations.length; i++) {
-    const [z0, w0] = stations[i];
-    const [z1, w1] = stations[i + 1];
-    if (z1 - z0 > 1e-9) parts.push(sqFrustum(w0, w1, z0, z1));
-  }
-  return union(parts);
-}
+/** Stack of square sections from [z, width] stations. */
+export const sqStack = (stations: [number, number][]): Solid => rectStack(stations.map(([z, w]) => [z, w, w]));
 
 export const cyl = (h: number, r0: number, r1 = r0, seg = 48): Solid => Manifold.cylinder(h, r0, r1, seg);
 
@@ -123,6 +123,7 @@ export function report(solid: Solid) {
     volume_cm3: +(solid.volume() / 1000).toFixed(2),
     petg_g: +((solid.volume() / 1000) * 1.27).toFixed(1),
     tris: nt,
+    bodies: solid.decompose().length,
     genus: solid.genus(),
     overhang_mm2: +overhang.toFixed(1),
   };

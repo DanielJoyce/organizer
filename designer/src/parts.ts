@@ -2,7 +2,7 @@
 // Conventions: lattice origin at a part's corner, X and Y in the plate, plate top at z = 0.
 // Faces marked M carry bosses and can only be the face printed on the bed.
 // Faces marked F carry lattice cells and can be printed in any orientation.
-import { Manifold, Solid, box, cyl, loft, sqStack, union } from "./kernel.js";
+import { Manifold, Solid, box, cyl, loft, rectStack, sqStack, union } from "./kernel.js";
 
 export interface System {
   u: number; // lattice pitch, also the height unit
@@ -12,8 +12,10 @@ export interface System {
   bossW: number; // locating boss width (clearance fit)
   bossL: number; // boss and grip peg length
   bossBore: number; // bosses are hollow square tubes; 0 makes them solid
+  lipH: number; // depth of the narrowed mouth of each cell
+  lipW: number; // how far the lip stands in from the cell wall, per side
   gripRoot: number; // grip peg width at root and neck
-  gripBulge: number; // grip peg width at the bulge (interference)
+  gripBulge: number; // grip peg width at the bulge: wider than the mouth, narrower than the cell
   bodyGap: number; // gap between neighbouring module bodies
   seamRelief: number; // relief under perimeter walls for the seam joiner
   floorT: number; // module floor
@@ -27,7 +29,9 @@ export interface System {
 export function makeSystem(u: number, over: Partial<System> = {}): System {
   const wall = 1.2;
   const cell = u - wall;
-  const bossW = cell - 0.4;
+  const lipW = 0.2;
+  const mouth = cell - 2 * lipW;
+  const bossW = mouth - 0.4;
   return {
     u,
     wall,
@@ -38,16 +42,18 @@ export function makeSystem(u: number, over: Partial<System> = {}): System {
     // Ring wall is 0.8 mm on small bosses. On large ones the bore is capped so the floor
     // above it never bridges more than 9.6 mm.
     bossBore: Math.min(bossW - 1.6, 9.6),
-    gripRoot: cell - 0.2,
-    gripBulge: cell + 0.3,
+    lipH: 1.0,
+    lipW,
+    gripRoot: mouth - 0.2,
+    gripBulge: mouth + 0.3,
     bodyGap: 0.4,
     seamRelief: 0.8,
     floorT: 2,
     binWall: 1.2,
     // On coarse pitches the key is smaller than the cell so its cap stays inside one cell.
-    keyHead: u >= 12 ? bossW - 2.0 : bossW - 0.4,
+    keyHead: u >= 12 ? cell - 2.4 : cell - 0.8,
     keyClear: 0.4,
-    keyCapR: u >= 12 ? u / 2 : bossW / 2 + 2.8,
+    keyCapR: u >= 12 ? u / 2 : (cell - 0.4) / 2 + 2.8,
     ...over,
   };
 }
@@ -55,6 +61,27 @@ export function makeSystem(u: number, over: Partial<System> = {}): System {
 export const SYS: System = makeSystem(16);
 
 const cellHole = (s: System) => s.u - s.wall;
+
+/**
+ * Void of one lattice cell, centred on Z with its mouth at z = 0 and running down `depth`.
+ * The top lipH is narrower than the rest. A grip peg bulge is pushed through that mouth and
+ * then sits free in the wider part below it, so the snap is a detent and stores no stress.
+ * The mouth edge is chamfered, which also absorbs first-layer squish when it prints on the bed.
+ */
+export function cellVoid(s: System, depth: number): Solid {
+  const h = cellHole(s);
+  const m = h - 2 * s.lipW;
+  const c = 0.3;
+  return union([
+    box(-h / 2, -h / 2, -depth - 1, h, h, depth + 1 - s.lipH),
+    sqStack([
+      [-s.lipH - 0.01, m],
+      [-c, m],
+      [0, m + 2 * c],
+      [1, m + 2 * c],
+    ]),
+  ]);
+}
 const cx = (s: System, i: number) => (i + 0.5) * s.u;
 
 // ---------------------------------------------------------------- lattice plate (F face)
@@ -93,10 +120,10 @@ export function plate(s: System, o: PlateOpts): Solid {
   const h = cellHole(s);
   const screws = new Set((o.screws ?? []).map(([i, j]) => `${i},${j}`));
   const holes: Solid[] = [];
+  const v = cellVoid(s, s.plateT);
   for (let i = 0; i < o.cols; i++)
     for (let j = 0; j < o.rows; j++)
-      if (!screws.has(`${i},${j}`))
-        holes.push(box(cx(s, i) - h / 2, cx(s, j) - h / 2, -s.plateT - 1, h, h, s.plateT + 2));
+      if (!screws.has(`${i},${j}`)) holes.push(v.translate([cx(s, i), cx(s, j), 0]));
   let p = box(0, 0, -s.plateT, W, D, s.plateT).subtract(union(holes));
   // Perimeter half-walls stop short of the bottom so a flat joiner can pass under the seam.
   const r = s.seamRelief;
@@ -115,7 +142,7 @@ export function plate(s: System, o: PlateOpts): Solid {
     const posts: Solid[] = [];
     const bores: Solid[] = [];
     for (const [i, j] of o.screws) {
-      posts.push(box(i * s.u, j * s.u, -s.plateT - s.standoff, s.u, s.u, s.standoff));
+      posts.push(box(i * s.u, j * s.u, -s.plateT - s.standoff, s.u, s.u, s.standoff + 0.02));
       const at = [cx(s, i), cx(s, j)] as const;
       bores.push(cyl(s.plateT + s.standoff + 2, d / 2).translate([at[0], at[1], -s.plateT - s.standoff - 1]));
       bores.push(cyl(d / 2, d / 2, d, 32).translate([at[0], at[1], -d / 2 + 0.01])); // countersink
@@ -149,16 +176,21 @@ export function boss(s: System): Solid {
   ]);
 }
 
-/** Grip peg. Same envelope as a boss plus a bulge that interferes with the cell. */
+/**
+ * Grip peg. A boss with a bulge on its two X faces. The bulge is wider than the cell mouth and
+ * narrower than the cell, so it clicks under the lip. Its upper ramp lets it pull back out.
+ */
 export function gripPeg(s: System): Solid {
   const L = s.bossL;
-  return sqStack([
-    [-L, s.gripRoot - 1.6],
-    [-L + 0.8, s.gripRoot],
-    [-L + 1.2, s.gripRoot],
-    [-L + 1.8, s.gripBulge],
-    [-L + 2.4, s.gripRoot],
-    [0.01, s.gripRoot],
+  const [r, b, w] = [s.gripRoot, s.gripBulge, s.bossW];
+  return rectStack([
+    [-L, r - 1.2, w - 1.2],
+    [-L + 0.6, r, w],
+    [-s.lipH - 1.2, r, w],
+    [-s.lipH - 0.8, b, w],
+    [-s.lipH - 0.4, b, w],
+    [-s.lipH + 0.2, r, w],
+    [0.01, r, w],
   ]);
 }
 
@@ -184,8 +216,11 @@ export function foot(s: System, o: FootOpts): Solid {
       const grip = isGrip(o.grip ?? "corners", i, j, o.nx, o.ny);
       if (!grip && o.fill === "checker" && (i + j) % 2 === 1) continue;
       parts.push((grip ? g : b).translate([cx(s, i), cx(s, j), 0]));
-      if (s.bossBore > 0)
-        bores.push(box(cx(s, i) - s.bossBore / 2, cx(s, j) - s.bossBore / 2, -s.bossL - 1, s.bossBore, s.bossBore, s.bossL + 1));
+      if (s.bossBore > 0) {
+        // Grip pegs get 1.2 mm walls on the bulge faces so those faces can flex.
+        const bx = grip ? s.gripRoot - 2.4 : s.bossBore;
+        bores.push(box(cx(s, i) - bx / 2, cx(s, j) - s.bossBore / 2, -s.bossL - 1, bx, s.bossBore, s.bossL + 1));
+      }
     }
   return bores.length ? union(parts).subtract(union(bores)) : union(parts);
 }
@@ -211,10 +246,11 @@ export function twistKey(s: System, stack: number, headSide = s.keyHead): Solid 
       [0.4, headSide],
       [head, headSide],
     ]),
-    cyl(neck, r).translate([0, 0, head]),
-    cyl(capR - r, r, capR).translate([0, 0, head + neck]),
-    cyl(1, capR).translate([0, 0, head + neck + capR - r]),
-    box(-capR, -1.2, head + neck + capR - r + 1, 2 * capR, 2.4, 5),
+    // Each piece starts 0.02 mm inside the one below so the union is one body.
+    cyl(neck + 0.02, r).translate([0, 0, head - 0.02]),
+    cyl(capR - r + 0.02, r - 0.02, capR).translate([0, 0, head + neck - 0.02]),
+    cyl(1.02, capR).translate([0, 0, head + neck + capR - r - 0.02]),
+    box(-capR, -1.2, head + neck + capR - r + 0.98, 2 * capR, 2.4, 5.02),
   ];
   return union(parts);
 }
@@ -236,7 +272,7 @@ export function seamJoiner(s: System): Solid {
     [pegH, c - 0.6],
   ]);
   return union([
-    box(-s.u + 0.3, -s.bossW / 2, -t, 2 * s.u - 0.6, s.bossW, t),
+    box(-s.u + 0.3, -s.bossW / 2, -t, 2 * s.u - 0.6, s.bossW, t + 0.02),
     peg.translate([-s.u / 2, 0, 0]),
     peg.translate([s.u / 2, 0, 0]),
   ]);
@@ -449,8 +485,9 @@ export function drawerShell(s: System, o: DrawerOpts): Solid {
   const pd = s.bossL + 0.4;
   for (const i of [0, o.nx - 1])
     for (let j = 0; j < o.ny; j++) {
-      pockets.push(box(cx(s, i) - h / 2, cx(s, j) - h / 2, -1, h, h, pd + 1));
-      pockets.push(box(cx(s, i) - h / 2, cx(s, j) - h / 2, H - pd, h, h, pd + 1));
+      const pocket = cellVoid(s, pd).intersect(box(-h, -h, -pd, 2 * h, 2 * h, pd + 2));
+      pockets.push(pocket.mirror([0, 0, 1]).translate([cx(s, i), cx(s, j), 0]));
+      pockets.push(pocket.translate([cx(s, i), cx(s, j), H]));
     }
   return outer.subtract(union([cavity, ...recess, ...pockets]));
 }
@@ -522,11 +559,13 @@ export function wallShelf(s: System, o: ShelfOpts): Solid {
   const h = cellHole(s);
   const deck = box(0, 0, -t, W, D, t);
   const flange = box(0, 0, -Hf, W, t, Hf);
+  const v = cellVoid(s, t);
   const strut = Manifold.hull([box(0, t - 0.1, -Hf, W, 0.1, 1.6), box(0, D - 1.6, -t - 0.1, W, 1.6, 0.1)]);
   const cuts: Solid[] = [];
   for (let i = 0; i < o.nx; i++) {
-    for (let j = 1; j < o.ny; j++) cuts.push(box(cx(s, i) - h / 2, cx(s, j) - h / 2, -t - 0.01, h, h, t + 1));
-    for (let k = 1; k < o.nz; k++) cuts.push(box(cx(s, i) - h / 2, -1, -cx(s, k) - h / 2, h, t + 1.01, h));
+    for (let j = 1; j < o.ny; j++) cuts.push(v.translate([cx(s, i), cx(s, j), 0]));
+    // Flange cells open towards the wall plate, so their mouth is on the y = 0 face.
+    for (let k = 1; k < o.nz; k++) cuts.push(v.rotate([-90, 0, 0]).translate([cx(s, i), 0, -cx(s, k)]));
   }
   return union([deck, flange, strut]).subtract(union(cuts));
 }
