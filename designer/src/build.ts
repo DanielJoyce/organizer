@@ -40,7 +40,9 @@ const parts: Record<string, Solid> = {
   drawer_96x48x128: P.drawer(s, drawerOpts),
   sprue_rack_96x80: P.sprueRack(s, sprueOpts),
   wall_shelf_96x64x48: P.wallShelf(s, { nx: n(96), ny: n(64), nz: n(48) }),
-  fit_test_plate_48: P.plate(s, { cols: n(48), rows: n(48) }),
+  // Three screw posts give the standoff a key head needs and leave a 48 mm square of open cells.
+  fit_test_plate_64: P.plate(s, { cols: n(64), rows: n(64), screws: [[0, 0], [0, n(64) - 1], [n(64) - 1, n(64) - 1]] }),
+  fit_test_lock_tab_48: P.tab(s, { nx: n(48), ny: n(48), grip: "none", lock: [[(n(48) - 1) / 2 | 0, (n(48) - 1) / 2 | 0]] }),
   fit_test_tab_32: P.bin(s, { nx: n(32), ny: n(32), nz: 8 / U, grip: U === 8 ? "checker" : "corners" }),
 };
 
@@ -48,7 +50,7 @@ const parts: Record<string, Solid> = {
 const printAs: Record<string, [number, number, number]> = {
   plate_desk_96: [180, 0, 0],
   plate_wall_96: [180, 0, 0],
-  fit_test_plate_48: [180, 0, 0],
+  fit_test_plate_64: [180, 0, 0],
   [`plate_desk_bed${BED}`]: [180, 0, 0],
   [`plate_wall_bed${BED}_9screws`]: [180, 0, 0],
   [`plate_wall_bed${BED}_4screws`]: [180, 0, 0],

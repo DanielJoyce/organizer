@@ -30,6 +30,21 @@ ok("key clear when turned", plate.intersect(turned).volume() < 1e-6, "no overlap
 const lifted = plate.intersect(turned.translate([0, 0, 1])).volume();
 ok("key retains", lifted > 1, `pulling 1 mm gives ${lifted.toFixed(2)} mm3 of overlap under the walls`);
 
+// Lock test tab on the fit test plate: tab drops in, key passes both parts and holds the tab down.
+{
+  const fp = P.plate(s, { cols: 64 / U, rows: 64 / U });
+  const m = Math.floor((48 / U - 1) / 2);
+  const t = P.tab(s, { nx: 48 / U, ny: 48 / U, grip: "none", lock: [[m, m]] });
+  const kAt: [number, number, number] = [(m + 0.5) * U, (m + 0.5) * U, 0];
+  const kIn = key.translate(kAt);
+  const kTurn = key.rotate([0, 0, 45]).translate(kAt);
+  ok("lock tab drops in", fp.intersect(t).volume() < 1e-6, "no overlap with plate");
+  ok("key passes tab and plate", fp.intersect(kIn).volume() + t.intersect(kIn).volume() < 1e-6, "no overlap while inserting");
+  ok("key turns freely", fp.intersect(kTurn).volume() + t.intersect(kTurn).volume() < 1e-6, "no overlap after turn");
+  const up = t.translate([0, 0, 1]).intersect(kTurn).volume();
+  ok("cap holds tab", up > 1, `lifting the tab 1 mm gives ${up.toFixed(2)} mm3 of overlap with the cap`);
+}
+
 // Squeeze tube: flats at bottle radius minus interference, circle at both ends.
 const o = P.DROPPER;
 const cellSolid = P.paintRack(s, o);

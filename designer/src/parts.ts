@@ -262,6 +262,14 @@ export function bin(s: System, o: BinOpts): Solid {
   return body;
 }
 
+/** Flat floor with a foot and optional key holes. No walls, so a key cell can be anywhere. */
+export function tab(s: System, o: FootOpts): Solid {
+  const g = s.bodyGap / 2;
+  let body = union([box(g, g, 0, o.nx * s.u - 2 * g, o.ny * s.u - 2 * g, s.floorT), foot(s, o)]);
+  if (o.lock?.length) body = body.subtract(lockHoles(s, o.lock, s.floorT));
+  return body;
+}
+
 // ---------------------------------------------------------------- paint cell
 
 export interface PaintOpts {
