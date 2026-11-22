@@ -33,6 +33,8 @@ const parts: Record<string, Solid> = {
   paint_cell_lame4: P.paintRack(s, { ...P.DROPPER, lobes: 4 }),
   paint_rack_3x2_lock: P.paintRack(s, { ...P.DROPPER, cols: 3, rows: 2, lockStrip: true }),
   twist_key_short: P.twistKey(s, s.floorT + s.plateT),
+  // Undersize key for bracketing the fit: 0.4 mm smaller head and neck.
+  twist_key_short_loose: P.twistKey(s, s.floorT + s.plateT, s.keyHead - 0.4),
   twist_key_long: P.twistKey(s, 2 * s.plateT),
   dowel: P.dowel(s),
   seam_joiner: P.seamJoiner(s),

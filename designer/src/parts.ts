@@ -18,6 +18,7 @@ export interface System {
   seamRelief: number; // relief under perimeter walls for the seam joiner
   floorT: number; // module floor
   keyHead: number; // twist key head, square side
+  keyClear: number; // clearance per side between key head and the hole in a module floor
   keyCapR: number; // twist key cap radius
   binWall: number;
 }
@@ -44,7 +45,8 @@ export function makeSystem(u: number, over: Partial<System> = {}): System {
     floorT: 2,
     binWall: 1.2,
     // On coarse pitches the key is smaller than the cell so its cap stays inside one cell.
-    keyHead: u >= 12 ? bossW - 1.6 : bossW,
+    keyHead: u >= 12 ? bossW - 2.0 : bossW - 0.4,
+    keyClear: 0.4,
     keyCapR: u >= 12 ? u / 2 : bossW / 2 + 2.8,
     ...over,
   };
@@ -190,20 +192,25 @@ export function foot(s: System, o: FootOpts): Solid {
 
 /** Through holes in a module floor that line up with plate cells and accept a twist key. */
 export function lockHoles(s: System, cells: [number, number][], depth: number): Solid {
-  const h = s.keyHead + 0.4;
+  const h = s.keyHead + 2 * s.keyClear;
   return union(cells.map(([i, j]) => box(cx(s, i) - h / 2, cx(s, j) - h / 2, -1, h, h, depth + 2)));
 }
 
 // ---------------------------------------------------------------- fasteners
 
 /** Twist key. Square head passes a cell, a 45 degree turn puts its corners under the walls. */
-export function twistKey(s: System, stack: number): Solid {
+export function twistKey(s: System, stack: number, headSide = s.keyHead): Solid {
   const head = 1.6;
-  const r = s.keyHead / 2;
+  const r = headSide / 2;
   const neck = stack + 0.1;
   const capR = s.keyCapR;
   const parts = [
-    box(-r, -r, 0, 2 * r, 2 * r, head),
+    // The head prints on the bed. The chamfer keeps first-layer squish inside the nominal size.
+    sqStack([
+      [0, headSide - 0.8],
+      [0.4, headSide],
+      [head, headSide],
+    ]),
     cyl(neck, r).translate([0, 0, head]),
     cyl(capR - r, r, capR).translate([0, 0, head + neck]),
     cyl(1, capR).translate([0, 0, head + neck + capR - r]),
